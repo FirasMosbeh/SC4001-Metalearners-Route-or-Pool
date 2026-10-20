@@ -17,7 +17,7 @@ GENERATORS = [
     "wukong",
 ]
 
-PILOT = True
+PILOT = False
 
 LABEL_NAMES = {0: "real", 1: "fake"}
 
@@ -29,20 +29,23 @@ META_VAL = 1000
 TEST = 2000
 
 # Pilot (~1/5 scale)
-PILOT_EXPERT_TRAIN = 50
-PILOT_EXPERT_VAL = 20
-PILOT_META_TRAIN = 40
-PILOT_META_VAL = 20
-PILOT_TEST = 50
+PILOT_EXPERT_TRAIN = 1000
+PILOT_EXPERT_VAL = 200
+PILOT_META_TRAIN = 400
+PILOT_META_VAL = 200
+PILOT_TEST = 500
 
 # Sampling
 SEED = 4001
-MAX_PER_LABEL_PER_SHARD = 150  # spreads samples over many shards (rows are sorted by class)
+# Spreads samples over many shards (rows are sorted by class).
+MAX_PER_LABEL_PER_SHARD = 150
 
 # Downloads (a shard is ~0.5 GB, normally ~20s)
-DOWNLOAD_TIMEOUT_SECONDS = 300  # a download taking longer is treated as hung and restarted
+# A download taking longer is treated as hung and restarted.
+DOWNLOAD_TIMEOUT_SECONDS = 300
 DOWNLOAD_ATTEMPTS = 5
-RETRY_WAIT_SECONDS = 30  # multiplied by the attempt number
+# Multiplied by the attempt number.
+RETRY_WAIT_SECONDS = 30
 
 # Image size and compression
 CROP_SIZE = 256
