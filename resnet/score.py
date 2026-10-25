@@ -10,9 +10,7 @@ import json
 import time
 
 import numpy as np
-import pandas as pd
 import torch
-from sklearn.metrics import roc_auc_score
 
 from common.device import get_device
 from common.log import Progress, format_duration, log
@@ -122,22 +120,6 @@ def load_scores(pool=None, generator=None, label=None, calibrated=True, limit=No
         temperatures = json.loads((FeatureStore(name).dir / INFO_FILE).read_text())["temperatures"]
         X = 1 / (1 + np.exp(-X / np.array([temperatures[expert] for expert in EXPERTS], dtype=np.float32)))
     return X, rows
-
-
-def cross_auroc(pool="meta_val", limit=None, arch=ARCH):
-    """AUROC of every expert (rows) on every generator's images of the pool (columns).
-
-    Expect ~1.0 on the diagonal, high values for sibling generators (SD <-> wukong, ADM -> glide/BigGAN)
-    and much lower ones elsewhere. Everything ~1.0 would point to a shortcut (image size or JPEG traces).
-    """
-    X, rows = load_scores(pool=pool, calibrated=False, limit=limit, arch=arch)
-    table = pd.DataFrame(index=list(EXPERTS), columns=config.GENERATORS, dtype=float)
-    for generator in config.GENERATORS:
-        is_generator = (rows.generator == generator).to_numpy()
-        if rows.label[is_generator].nunique() == 2:
-            for column, expert in enumerate(EXPERTS):
-                table.loc[expert, generator] = roc_auc_score(rows.label[is_generator], X[is_generator, column])
-    return table
 
 
 if __name__ == "__main__":
