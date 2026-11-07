@@ -9,7 +9,7 @@ from meta.learners.mlp import MLPNet
 
 
 class ShuffledMLPLearner(MetaLearner):
-    """The MLP from #7, with expert column order randomly shuffled every batch (control).
+    """The MLP, with expert column order randomly shuffled per image (control).
 
     Has the same capacity and size as MLP, but is forced to be blind to expert identity
     (Pair B control partner to MLPLearner).
@@ -56,9 +56,8 @@ class ShuffledMLPLearner(MetaLearner):
             for bx, by in loader:
                 bx, by = bx.to(device), by.to(device)
 
-                # Shuffle expert order randomly for every batch (destroys identity)
-                perm = torch.randperm(bx.shape[1], device=device)
-                bx = bx[:, perm]
+                # Shuffle expert order independently for every image (destroys identity)
+                bx = bx.gather(1, torch.rand(bx.shape, device=device).argsort(dim=1))
 
                 optimizer.zero_grad()
                 out = self.model(bx)
