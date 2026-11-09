@@ -84,6 +84,11 @@ def fit_temperature(logits, labels, bounds=TEMPERATURE_BOUNDS):
     return float(np.exp(result.x))
 
 
+def estimate(seconds):
+    """Duration and clock time when it's over, e.g. 1h05m00s (~Sat 21:40)."""
+    return f"{format_duration(seconds)} (~{time.strftime('%a %H:%M', time.localtime(time.time() + seconds))})"
+
+
 def train_epoch(model, loader, labels, optimizer, scheduler, scaler, device, epoch):
     """One pass over the training images. Returns the mean training loss."""
     model.train()
@@ -106,10 +111,11 @@ def train_epoch(model, loader, labels, optimizer, scheduler, scaler, device, epo
 
 
 def train_expert(expert, manifest, device, epochs=EPOCHS, limit=None,
-                 batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, arch=ARCH):
+                 batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, arch=ARCH, queued=0):
     """Train, calibrate and save one expert. Returns its info. Skipped if the checkpoint already exists.
 
     limit: at most this many images per label and pool (for test runs, saved in a separate folder).
+    queued: networks still to train after this one, for the time estimate of the whole run.
     """
     path = checkpoint_path(expert, arch, limit)
     if path.exists():
@@ -118,9 +124,23 @@ def train_expert(expert, manifest, device, epochs=EPOCHS, limit=None,
 
     train_rows = expert_rows(manifest, expert, "expert_train", limit)
     val_rows = expert_rows(manifest, expert, "expert_val", limit)
-    for name, rows in (("expert_train", train_rows), ("expert_val", val_rows)):
+    info = {"expert": expert, "generators": EXPERTS[expert]}
+    return train_model(expert, train_rows, val_rows, path, info, device, epochs, limit, batch_size, num_workers, arch,
+                       queued)
+
+
+def train_model(name, train_rows, val_rows, path, info, device, epochs=EPOCHS, limit=None,
+                batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, arch=ARCH, queued=0):
+    """Train on train_rows, keep the best epoch on val_rows, calibrate and save to path. Returns the info.
+
+    name: shown in the logs. info: what the model is, e.g. {"expert", "generators"}; the training results
+    are added to it. queued: networks still to train after this one, each assumed to take as long as this one.
+    After each epoch the remaining time is logged for this network and for the whole run. Both assume every
+    epoch runs, so early stopping can only make them finish earlier.
+    """
+    for pool, rows in (("train", train_rows), ("val", val_rows)):
         if rows.label.nunique() < 2:
-            raise ValueError(f"[{expert}] {name} needs real and fake images, has {rows.label.value_counts().to_dict()}")
+            raise ValueError(f"[{name}] {pool} needs real and fake images, has {rows.label.value_counts().to_dict()}")
     train_labels = torch.tensor(train_rows.label.to_numpy(), dtype=torch.float32)
     val_labels = val_rows.label.to_numpy()
 
@@ -136,29 +156,32 @@ def train_expert(expert, manifest, device, epochs=EPOCHS, limit=None,
                                                     pct_start=0.1)
     scaler = torch.amp.GradScaler("cuda", enabled=device == "cuda")
 
-    log(f"[{expert}] {arch} on {device}: {len(train_rows)} train images ({train_rows.label.mean():.0%} fake), "
-        f"{len(val_rows)} val images, generators {EXPERTS[expert]}")
+    log(f"[{name}] {arch} on {device}: {len(train_rows)} train images ({train_rows.label.mean():.0%} fake), "
+        f"{len(val_rows)} val images, generators {info['generators']}")
     best_loss, best_state, best_epoch, history = float("inf"), None, 0, []
     start = time.time()
     for epoch in range(1, epochs + 1):
         train_loss = train_epoch(model, train_loader, train_labels, optimizer, scheduler, scaler, device, epoch)
         val = metrics(predict_logits(model, val_loader, device), val_labels)
         history.append({"epoch": epoch, "train_loss": train_loss, **{f"val_{k}": v for k, v in val.items()}})
-        log(f"[{expert}] epoch {epoch}: train loss {train_loss:.4f} | val loss {val['loss']:.4f} "
+        log(f"[{name}] epoch {epoch}: train loss {train_loss:.4f} | val loss {val['loss']:.4f} "
             f"acc {val['acc']:.4f} auc {val['auc']:.4f} | {format_duration(time.time() - start)}")
+        epoch_seconds = (time.time() - start) / epoch
+        if epoch < epochs:
+            log(f"[{name}] left at most: this network {estimate((epochs - epoch) * epoch_seconds)}, "
+                f"all {queued + 1} networks {estimate((epochs - epoch + queued * epochs) * epoch_seconds)}")
         if val["loss"] < best_loss - 1e-5:
             best_loss, best_epoch = val["loss"], epoch
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         elif epoch - best_epoch >= PATIENCE:
-            log(f"[{expert}] early stop, best epoch {best_epoch}")
+            log(f"[{name}] early stop, best epoch {best_epoch}")
             break
 
     model.load_state_dict(best_state)
     val_logits = predict_logits(model, val_loader, device)
     temperature = fit_temperature(val_logits, val_labels)
     info = {
-        "expert": expert,
-        "generators": EXPERTS[expert],
+        **info,
         "arch": arch,
         "temperature": temperature,
         "best_epoch": best_epoch,
@@ -176,7 +199,7 @@ def train_expert(expert, manifest, device, epochs=EPOCHS, limit=None,
     temporary = path.with_suffix(".tmp")
     torch.save({"state_dict": best_state, "info": info}, temporary)
     temporary.replace(path)
-    log(f"[{expert}] saved: val auc {info['val']['auc']:.4f}, loss {info['val']['loss']:.4f}, "
+    log(f"[{name}] saved: val auc {info['val']['auc']:.4f}, loss {info['val']['loss']:.4f}, "
         f"T={temperature:.3f}, {format_duration(info['train_seconds'])}")
     return info
 
@@ -186,9 +209,12 @@ def train_all(experts=None, epochs=EPOCHS, limit=None, batch_size=BATCH_SIZE, nu
     manifest = load_manifest()
     check_no_leaks(manifest)
     device = get_device()
+    experts = experts or list(EXPERTS)
+    untrained = [expert for expert in experts if not checkpoint_path(expert, arch, limit).exists()]
     infos = {}
-    for expert in experts or EXPERTS:
-        infos[expert] = train_expert(expert, manifest, device, epochs, limit, batch_size, num_workers, arch)
+    for expert in experts:
+        queued = len(untrained) - untrained.index(expert) - 1 if expert in untrained else 0
+        infos[expert] = train_expert(expert, manifest, device, epochs, limit, batch_size, num_workers, arch, queued)
         if device == "mps":
             torch.mps.empty_cache()
         elif device == "cuda":
