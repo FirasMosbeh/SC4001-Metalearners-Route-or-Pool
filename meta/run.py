@@ -5,6 +5,7 @@ dataset_dir/results/, which is what notebooks/meta_learners.ipynb reads.
 """
 import time
 
+import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -28,23 +29,34 @@ def results_path(eval_pool="test"):
     return config.dataset_dir() / RESULTS_DIR / f"meta_learners_{eval_pool}.csv"
 
 
+def scores_path(eval_pool="test"):
+    """Held-out labels and scores of every run, {(base, learner, seed, merge_siblings, scale, fold): (labels, scores)}."""
+    return config.dataset_dir() / RESULTS_DIR / f"meta_learners_{eval_pool}_scores.joblib"
+
+
 def run_all(eval_pool="test", bases=BASES, seeds=SEEDS, variants=((True, False), (False, False), (True, True))):
-    """variants: (merge_siblings, scale) settings to run. Returns the results, saved after each base."""
+    """variants: (merge_siblings, scale) settings to run. Returns the results, saved after each base together
+    with the held-out scores of every run (scores_path), which meta.bootstrap compares."""
     torch.set_num_threads(1)  # these networks are tiny, so more threads only add overhead
     path = results_path(eval_pool)
     path.parent.mkdir(parents=True, exist_ok=True)
-    parts, start = [], time.time()
+    parts, all_scores, start = [], {}, time.time()
     for base in bases:
         for merge_siblings, scale in variants:
             runs = [(name, None) for name in FIXED] + [(name, seed) for name in SEEDED for seed in seeds]
             for name, seed in runs:
                 learner = LEARNERS[name]() if seed is None else LEARNERS[name](seed=seed)
-                table = run_loo(learner, base, merge_siblings, eval_pool, scale).drop(index="mean").reset_index()
+                scores = {}
+                table = run_loo(learner, base, merge_siblings, eval_pool, scale, scores).drop(index="mean").reset_index()
                 parts.append(table.assign(base=base, learner=name, seed=seed, merge_siblings=merge_siblings, scale=scale))
+                all_scores.update({(base, name, seed, merge_siblings, scale, fold): s for fold, s in scores.items()})
             if base == "clip":
-                table = run_generalist(merge_siblings, eval_pool).drop(index="mean").reset_index()
+                scores = {}
+                table = run_generalist(merge_siblings, eval_pool, scores).drop(index="mean").reset_index()
                 parts.append(table.assign(base=base, learner=GENERALIST, seed=None, merge_siblings=merge_siblings, scale=scale))
+                all_scores.update({(base, GENERALIST, None, merge_siblings, scale, fold): s for fold, s in scores.items()})
             pd.concat(parts).to_csv(path, index=False)
+            joblib.dump(all_scores, scores_path(eval_pool))
             log(f"{base}, merge_siblings={merge_siblings}, scale={scale}: done, {format_duration(time.time() - start)}")
     return pd.concat(parts)
 

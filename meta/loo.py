@@ -77,13 +77,14 @@ def own_columns(rows, columns):
     return rows.generator.map(expert_of).map(position).to_numpy(dtype=int)
 
 
-def run_loo(learner, base, merge_siblings=False, eval_pool="test", scale=False):
+def run_loo(learner, base, merge_siblings=False, eval_pool="test", scale=False, scores=None):
     """Fit and evaluate a fresh copy of learner per fold. Returns one row per fold plus the mean.
 
     scale: divide each expert's logits by their standard deviation on the fold's training images (sensitivity
     check: pools differ in logit size, but on meta_val this changed nothing except making gating worse).
     Columns expert_mean_auc and expert_best_auc are the individual experts on the held-out images, averaged
     and at their best; the best one can only be known afterwards, so it's an upper bound.
+    scores: a dict that, if given, receives {fold: (labels, scores)} of the held-out images (meta.bootstrap).
     """
     X_train, rows_train = load_pool(base, "meta_train")
     X_val, rows_val = load_pool(base, "meta_val")
@@ -113,6 +114,8 @@ def run_loo(learner, base, merge_siblings=False, eval_pool="test", scale=False):
         threshold = best_threshold(fold_learner.predict(fold_val), y_val)
         unseen, seen = fold_learner.predict(fold_eval[is_unseen]), fold_learner.predict(fold_eval[~is_unseen])
         expert_aucs = [roc_auc_score(y_unseen, fold_eval[is_unseen, c]) for c in range(len(columns))]
+        if scores is not None:
+            scores[fold] = (y_unseen.astype(np.int8), unseen.astype(np.float32))
         results.append({
             "held out": fold,
             "generators": ", ".join(generators),

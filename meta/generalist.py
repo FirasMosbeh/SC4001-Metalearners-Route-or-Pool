@@ -37,8 +37,8 @@ def fit_generalist(held_out):
     return model.fit(X[positions[rows.file].to_numpy()], rows.label.to_numpy()), len(rows)
 
 
-def run_generalist(merge_siblings=False, eval_pool="test"):
-    """One row per fold plus the mean, with the same columns as meta.loo.run_loo."""
+def run_generalist(merge_siblings=False, eval_pool="test", scores=None):
+    """One row per fold plus the mean, with the same columns as meta.loo.run_loo (scores as there too)."""
     X_val, rows_val = load_pool("meta_val")
     X_eval, rows_eval = load_pool(eval_pool)
     y_eval = rows_eval.label.to_numpy()
@@ -50,13 +50,16 @@ def run_generalist(merge_siblings=False, eval_pool="test"):
         model, n_train = fit_generalist(tuple(experts))
         y_val = rows_val.label.to_numpy()[is_val]
         threshold = best_threshold(model.decision_function(X_val[is_val]), y_val)
+        unseen = model.decision_function(X_eval[is_unseen])
+        if scores is not None:
+            scores[fold] = (y_eval[is_unseen].astype("int8"), unseen.astype("float32"))
         results.append({
             "held out": fold,
             "generators": ", ".join(generators),
             "n_train": n_train,
             "n_val": int(is_val.sum()),
             "n_eval": int(is_unseen.sum()),
-            **fold_metrics(model.decision_function(X_eval[is_unseen]), y_eval[is_unseen],
+            **fold_metrics(unseen, y_eval[is_unseen],
                            model.decision_function(X_eval[~is_unseen]), y_eval[~is_unseen], threshold),
         })
     return to_table(results)
