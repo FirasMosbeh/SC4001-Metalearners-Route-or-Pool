@@ -13,13 +13,16 @@ import torch
 
 from common.log import format_duration, log
 from data import config
+from data.features import FeatureStore
 from meta.generalist import run_generalist
 from meta.learners import LEARNERS
 from meta.loo import run_loo
+from resnet.generalist import feature_name, run_generalist as run_resnet_generalist
 
 RESULTS_DIR = "results"  # inside the dataset folder
 BASES = ["clip", "resnet18", "resnet50"]
-GENERALIST = "generalist"  # a CLIP probe on the images themselves, so it only has a row for the clip base
+GENERALIST = "generalist"  # one detector per fold on the images themselves (meta.generalist, resnet.generalist)
+VARIANTS = ((True, False), (False, False), (True, True))  # (merge_siblings, scale)
 FIXED = ["best_expert", "mean", "max", "sorted_lr", "stacking_lr", "pu_stacking_lr"]
 SEEDED = ["mlp", "shuffled_mlp", "deep_sets", "gating", "pu_mlp", "pu_deep_sets", "pu_gating"]
 SEEDS = [4001, 4002, 4003]
@@ -34,7 +37,28 @@ def scores_path(eval_pool="test"):
     return config.dataset_dir() / RESULTS_DIR / f"meta_learners_{eval_pool}_scores.joblib"
 
 
-def run_all(eval_pool="test", bases=BASES, seeds=SEEDS, variants=((True, False), (False, False), (True, True))):
+def has_generalist(base):
+    """CLIP generalists are fitted on the fly; ResNet ones need their scores (resnet/generalist.py score())."""
+    return base == "clip" or FeatureStore(feature_name(base)).dir.exists()
+
+
+def run_generalists(base, merge_siblings, scale, eval_pool):
+    """The generalist rows and held-out scores of one base, keyed like run_all's.
+
+    A generalist sees no expert scores, so scale changes nothing; its rows are repeated per variant so that
+    every (merge_siblings, scale) table has them.
+    """
+    scores = {}
+    if base == "clip":
+        table = run_generalist(merge_siblings, eval_pool, scores)
+    else:
+        table = run_resnet_generalist(merge_siblings, eval_pool, arch=base, scores=scores)
+    table = table.drop(index="mean").reset_index().assign(
+        base=base, learner=GENERALIST, seed=None, merge_siblings=merge_siblings, scale=scale)
+    return table, {(base, GENERALIST, None, merge_siblings, scale, fold): s for fold, s in scores.items()}
+
+
+def run_all(eval_pool="test", bases=BASES, seeds=SEEDS, variants=VARIANTS):
     """variants: (merge_siblings, scale) settings to run. Returns the results, saved after each base together
     with the held-out scores of every run (scores_path), which meta.bootstrap compares."""
     torch.set_num_threads(1)  # these networks are tiny, so more threads only add overhead
@@ -50,15 +74,36 @@ def run_all(eval_pool="test", bases=BASES, seeds=SEEDS, variants=((True, False),
                 table = run_loo(learner, base, merge_siblings, eval_pool, scale, scores).drop(index="mean").reset_index()
                 parts.append(table.assign(base=base, learner=name, seed=seed, merge_siblings=merge_siblings, scale=scale))
                 all_scores.update({(base, name, seed, merge_siblings, scale, fold): s for fold, s in scores.items()})
-            if base == "clip":
-                scores = {}
-                table = run_generalist(merge_siblings, eval_pool, scores).drop(index="mean").reset_index()
-                parts.append(table.assign(base=base, learner=GENERALIST, seed=None, merge_siblings=merge_siblings, scale=scale))
-                all_scores.update({(base, GENERALIST, None, merge_siblings, scale, fold): s for fold, s in scores.items()})
+            if has_generalist(base):
+                table, scores = run_generalists(base, merge_siblings, scale, eval_pool)
+                parts.append(table)
+                all_scores.update(scores)
             pd.concat(parts).to_csv(path, index=False)
             joblib.dump(all_scores, scores_path(eval_pool))
             log(f"{base}, merge_siblings={merge_siblings}, scale={scale}: done, {format_duration(time.time() - start)}")
     return pd.concat(parts)
+
+
+def add_generalists(eval_pool="test", bases=("resnet18", "resnet50"), variants=VARIANTS):
+    """Add (or replace) the generalist rows and scores of bases in saved results, without rerunning the
+    meta-learners. For generalists scored after run_all, e.g. the ResNet ones."""
+    results = load_results(eval_pool)
+    results = results[~((results.learner == GENERALIST) & results.base.isin(bases))]
+    all_scores = {key: s for key, s in joblib.load(scores_path(eval_pool)).items()
+                  if not (key[1] == GENERALIST and key[0] in bases)}
+    parts = [results]
+    for base in bases:
+        if not has_generalist(base):
+            log(f"{base}: no generalist scores, skipped")
+            continue
+        for merge_siblings, scale in variants:
+            table, scores = run_generalists(base, merge_siblings, scale, eval_pool)
+            parts.append(table)
+            all_scores.update(scores)
+    results = pd.concat(parts)
+    results.to_csv(results_path(eval_pool), index=False)
+    joblib.dump(all_scores, scores_path(eval_pool))
+    return results
 
 
 def load_results(eval_pool="test"):

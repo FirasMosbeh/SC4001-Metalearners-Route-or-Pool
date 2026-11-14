@@ -142,8 +142,11 @@ def score(batch_size=BATCH_SIZE * 2, num_workers=NUM_WORKERS, limit=None, arch=A
     log(f"{store.dir.name}: {len(todo)} images in {format_duration(time.time() - start)}")
 
 
-def run_generalist(merge_siblings=False, eval_pool="test", limit=None, arch=ARCH):
-    """One row per fold plus the mean, with the same columns as meta.generalist.run_generalist."""
+def run_generalist(merge_siblings=False, eval_pool="test", limit=None, arch=ARCH, scores=None):
+    """One row per fold plus the mean, with the same columns as meta.generalist.run_generalist.
+
+    scores: optional dict, filled with {fold: (labels, scores)} of the held-out images, as in meta.loo.run_loo.
+    """
     store = FeatureStore(feature_name(arch, limit))
     rows = scored_rows(limit)
     rows_val, rows_eval = rows[rows.pool == "meta_val"], rows[rows.pool == eval_pool]
@@ -156,11 +159,16 @@ def run_generalist(merge_siblings=False, eval_pool="test", limit=None, arch=ARCH
         is_val = ~rows_val.generator.isin(generators).to_numpy()
         is_unseen = rows_eval.generator.isin(generators).to_numpy()
         threshold = best_threshold(X_val[is_val, column], rows_val.label.to_numpy()[is_val])
-        info = torch.load(checkpoint_path(fold, arch, limit), map_location="cpu")["info"]
+        if scores is not None:
+            scores[fold] = (y_eval[is_unseen].astype("int8"), X_eval[is_unseen, column].astype("float32"))
+        path = checkpoint_path(fold, arch, limit)
+        # The scores are enough to evaluate; without the checkpoint, count the training images instead.
+        n_train = (torch.load(path, map_location="cpu")["info"]["n_train"] if path.exists()
+                   else len(seen_rows(load_manifest(), experts, "expert_train", limit)))
         results.append({
             "held out": fold,
             "generators": ", ".join(generators),
-            "n_train": info["n_train"],
+            "n_train": n_train,
             "n_val": int(is_val.sum()),
             "n_eval": int(is_unseen.sum()),
             **fold_metrics(X_eval[is_unseen, column], y_eval[is_unseen],

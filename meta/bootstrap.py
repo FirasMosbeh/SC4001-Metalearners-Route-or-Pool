@@ -20,7 +20,7 @@ N_SAMPLES = 1000
 COMPARISONS = (
     # (question, base, learner, compared with base, learner)
     [("RQ1", base, learner, base, "best_expert") for base in BASES for learner in ["mean", "mlp"]]
-    + [("RQ1", "clip", "generalist", "clip", learner) for learner in ["mean", "sorted_lr", "mlp", "deep_sets"]]
+    + [("RQ1", base, "generalist", base, learner) for base in BASES for learner in ["mean", "sorted_lr", "mlp", "deep_sets"]]
     + [("RQ2", base, a, base, b) for base in BASES for a, b in [("mlp", "shuffled_mlp"), ("stacking_lr", "sorted_lr")]]
     + [("RQ3", base, learner, base, "mean") for base in BASES for learner in ["stacking_lr", "mlp", "deep_sets", "gating"]]
     + [("RQ4", a, learner, b, learner) for learner in ["mean", "mlp"] for a, b in [("clip", "resnet50"), ("resnet50", "resnet18")]]
