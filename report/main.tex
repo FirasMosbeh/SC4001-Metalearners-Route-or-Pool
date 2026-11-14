@@ -14,13 +14,6 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,fit,positioning}
 
-% Remarks to the team: what changed since the previous draft. \remarksfalse hides them all;
-% the 10-page limit is checked with them hidden.
-\newif\ifremarks
-\remarkstrue
-\definecolor{remarkcolor}{RGB}{140,0,160}
-\newcommand{\remark}[1]{\ifremarks{\color{remarkcolor}\footnotesize[#1]}\fi}
-\newcommand{\newref}[1]{\ifremarks{\color{remarkcolor}#1}\else#1\fi} % references added in this revision
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
 \captionsetup{font=small, labelfont=bf, skip=4pt}
@@ -48,30 +41,34 @@
 \vspace{0.9cm}
 {\large Group 40\par}
 \vspace{0.6cm}
-{\renewcommand{\arraystretch}{1.6}
-\begin{tabularx}{\textwidth}{@{}l l X@{}}
+{\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{@{}p{6cm}p{5cm}@{}}
 \toprule
-\textbf{Name} & \textbf{Matriculation number} & \textbf{Contributions} \\
+\textbf{Name} & \textbf{Matriculation number} \\
 \midrule
-Firas Mosbeh & & \\
-Lída Pavelková & & \\
-Tim Martin Kausemann & & \\
+Firas Mosbeh & \\
+Lída Pavelková & \\
+Tim Martin Kausemann & \\
 \bottomrule
-\end{tabularx}\par}
+\end{tabular}\par}
 \vspace{1.0cm}
 \begin{minipage}{\textwidth}
 \small
-\textbf{Abstract.} A detector trained on the images of one generator rarely recognises the images of another. We ask whether a combination of generator-specific experts does better on a generator that none of the experts has seen. On a 176,000-image subsample of GenImage, we train seven experts per backbone (linear probes on frozen CLIP features and fine-tuned ResNet-50 networks) and compare eight ways of combining them under leave-one-generator-out evaluation, with paired bootstrap intervals. Every combiner beats the best single expert chosen on the known generators by a wide margin (unseen AUROC 0.972 vs 0.908 for CLIP, 0.950 vs 0.806 for ResNet-50). Knowing which expert produced which score never helps, and extra combiner capacity only pays off for the ResNet experts. A single detector trained on all known generators, however, beats every combiner on both backbones (0.975 for CLIP, 0.978 for ResNet-50), by a margin that is small for CLIP and large and consistent for ResNet-50. We argue that this is a limit of the expert scores themselves, not of the combiners.
+\textbf{Abstract.} Detectors of AI-generated images are usually trained on a few known generators, and they often fail on images from a generator they have not seen. We ask whether a combination of generator-specific experts does better on a generator that none of the experts has seen. On a 176,000-image subsample of GenImage, we train seven experts per backbone (linear probes on frozen CLIP features and fine-tuned ResNet-50 networks) and compare eight ways of combining them under leave-one-generator-out evaluation, with paired bootstrap intervals. Every combiner beats the best single expert chosen on the known generators by a wide margin (unseen AUROC 0.972 vs 0.908 for CLIP, 0.950 vs 0.806 for ResNet-50). Knowing which expert produced which score never helps, and extra combiner capacity only pays off for the ResNet experts. A single detector trained on all known generators, however, beats every combiner on both backbones (0.975 for CLIP, 0.978 for ResNet-50), by a margin that is small for CLIP and large and consistent for ResNet-50. We argue that this is a limit of the expert scores themselves, not of the combiners.
 \end{minipage}
 \vfill
 {\normalsize November 2026\par}
 \end{titlepage}
+
+% Contents page: no page number, and like the cover it does not count towards the 10 pages.
+\tableofcontents
+\thispagestyle{empty}
+\clearpage
 \setcounter{page}{1}
 
 \section{Introduction}\label{sec:intro}
 
 \subsection{Review of existing techniques}
-\remark{Heading renamed from ``Background'', since the handout asks for a review of existing techniques. The first two sentences are new and define generator and detector (Tim's note).}
 
 Image generators, such as generative adversarial networks (GANs) and diffusion models, now produce images that people cannot reliably tell apart from photographs. A detector is a binary classifier that decides whether an image is a real photograph or was produced by such a generator. Detectors trained on images from a single generator are very accurate on that generator, but often fail on generators they have not seen. GenImage makes this explicit: a ResNet-50 trained on one generator reaches at least 98.8\% accuracy on that generator's test images, while accuracy on other generators often falls to near chance~\cite{zhu2023genimage}. For example, a detector trained on Stable Diffusion V1.4 reaches only 54.9\% on Midjourney and 52.0\% on BigGAN, and the average over all 64 train--test pairs is 66.9\%~\cite{zhu2023genimage}. Transfer works mainly between closely related generators: the same detector reaches over 98\% on Stable Diffusion V1.5 and Wukong, which share the same architecture~\cite{zhu2023genimage}.
 
@@ -91,7 +88,6 @@ We address four research questions:
 \end{description}
 
 We answer these questions with leave-one-generator-out evaluation on GenImage (Section~\ref{sec:dataset}): each fold removes one generator's expert, fits the combiner on the remaining generators and tests it only on the held-out one (Figure~\ref{fig:overview}). We also test how far the experts depend on compression and resizing traces (Section~\ref{sec:preprocessing}), the robustness question of our project direction.
-\remark{Last sentence new: it links the JPEG and upscaling checks to the robustness part of direction J.}
 
 \section{Dataset}\label{sec:dataset}
 
@@ -102,7 +98,6 @@ We build on GenImage~\cite{zhu2023genimage}, a benchmark that pairs real photogr
 \subsection{Sampling and splits}
 
 We split the data into five disjoint pools (Table~\ref{tab:pools}). The four pools used for training and validation are drawn from GenImage's training split. The \emph{test} pool is a seeded uniform subsample of the official test split, so test images are disjoint from all training data by construction, and duplicate images are removed across all pools. Every pool is balanced, giving 88,000 real and 88,000 fake images in total. Appendix~\ref{app:sampling} describes how we sample the shards of the mirror so that every pool covers the whole range of ImageNet classes.
-\remark{The shard-sampling paragraph moved to Appendix A unchanged.}
 
 \begin{table}[t]
 \centering
@@ -136,17 +131,14 @@ Real and fake images are processed identically. Each image is converted to RGB. 
 \caption{One real (top) and one fake (bottom) image per generator after preprocessing, drawn at random from \texttt{meta\_val} with a fixed seed.}
 \label{fig:examples}
 \end{figure}
-\remark{Figure 1 is new: real \texttt{meta\_val} images, file \texttt{report/figures/examples.jpg}.}
 
-This does not remove every confound. Only 8.7\% of real images had a short side below 256\,px and were upscaled, but all BigGAN fakes ($128\times128$) were, while no other generator's fakes were. A linear probe on CLIP features, trained on real images only to separate upscaled from non-upscaled images, reaches an AUROC\footnote{The area under the ROC curve: the probability that a randomly chosen positive image is scored above a randomly chosen negative one. 0.5 is chance and 1 is perfect; no decision threshold is needed (Section~\ref{sec:protocol}).} of 0.965 (0.95--0.98 per generator). A control that resamples the same images without changing their content confirms that CLIP detects the resampling itself (AUROC 0.907). The trace is therefore available to the experts, and for the BigGAN expert it coincides with the fake label, which may inflate its in-distribution score (validation AUROC 0.9999). It also reaches the experts' outputs: among real \texttt{meta\_val} images, the BigGAN expert calls 5.9\% of the upscaled ones fake against 0.4\% of the others with CLIP, and 1.9\% against 0.2\% with ResNet-50. The cue need not affect all combiners alike, because a combiner that sees expert identity can learn what a high BigGAN score means, while an identity-blind one cannot; identity-aware combiners are not better on any backbone, though (Section~\ref{sec:results}). As a held-out generator, BigGAN may become harder rather than easier, because the remaining experts only saw upscaled reals. This fits the ResNet-50 pool, where the best single expert does worst on the BigGAN fold, but not the CLIP pool. Cropping without resizing also means the crop covers a different share of each original image (half the width for SD and Wukong, a quarter for Midjourney).
-\remark{AUROC footnote new (Tim's note). ``We did not test the ResNet experts'' replaced: we did (1.9\% vs 0.2\%, re-checked from the saved scores); ``affects them alike'' and ``BigGAN is made harder'' softened to what the data shows.}
+This does not remove every confound. Only 8.7\% of real images had a short side below 256\,px and were upscaled, but all BigGAN fakes ($128\times128$) were, while no other generator's fakes were. A linear probe on CLIP features, trained on real images only to separate upscaled from non-upscaled images, reaches an AUROC (defined in Section~\ref{sec:protocol}) of 0.965 (0.95--0.98 per generator). A control that resamples the same images without changing their content confirms that CLIP detects the resampling itself (AUROC 0.907). The trace is therefore available to the experts, and for the BigGAN expert it coincides with the fake label, which may inflate its in-distribution score (validation AUROC 0.9999). It also reaches the experts' outputs: among real \texttt{meta\_val} images, the BigGAN expert calls 5.9\% of the upscaled ones fake against 0.4\% of the others with CLIP, and 1.9\% against 0.2\% with ResNet-50. The cue need not affect all combiners alike, because a combiner that sees expert identity can learn what a high BigGAN score means, while an identity-blind one cannot; identity-aware combiners are not better on any backbone, though (Section~\ref{sec:results}). As a held-out generator, BigGAN may become harder rather than easier, because the remaining experts only saw upscaled reals. This fits the ResNet-50 pool, where the best single expert does worst on the BigGAN fold, but not the CLIP pool. Cropping without resizing also means the crop covers a different share of each original image (half the width for SD and Wukong, a quarter for Midjourney).
 
 Finally, every real image was a JPEG before our preprocessing, so after re-encoding it has been compressed twice, while a fake has been compressed once~\cite{grommelt2024fake}. An expert could learn ``compressed before'' instead of the traces of its generator. We test this by giving fakes the same history. For each generator we take 500 fake and 500 real \texttt{meta\_val} images, compress the fakes once more at JPEG quality 90 or 75 before the usual quality-95 re-encoding, leave the reals untouched, and score all of them with the generator's own ResNet-50 expert (Section~\ref{sec:resnet}). Without the extra pass the experts call 96.8--100\% of fakes fake at a logit threshold of zero, while calling 0.2--2.8\% of reals fake. After it, this falls to 61.6--93.8\% at quality 90 and to 23.2--74.6\% at quality 75. The ranking holds up much better: AUROC stays at 0.950 or above at quality 90 and 0.916 or above at quality 75. Compression history therefore moves the experts' decisions a great deal, but it is not the main thing they rank on. The check cannot fully separate the two explanations, because a strong JPEG pass also erases part of the generator's own high-frequency traces, so a shortcut and damaged evidence predict the same drop. In practice, the decision threshold is the fragile part of such a detector, and it would need to be re-fitted for images with an unknown compression history.
 
 \section{Experts}\label{sec:experts}
 
-We use PyTorch~\cite{paszke2019pytorch} and torchvision for the ResNets, Hugging Face Transformers~\cite{wolf2020transformers} for CLIP, scikit-learn~\cite{pedregosa2011sklearn} for the logistic regressions and nearest neighbours, and NumPy~\cite{harris2020numpy} and pandas~\cite{mckinney2010pandas} for the analysis. We build on two sets of pretrained weights, OpenAI's CLIP ViT-L/14 and torchvision's ImageNet ResNet-50; all other code is our own, and the submitted ZIP file contains it with instructions to reproduce our results.
-\remark{Replaces the implementation TODO; the second sentence acknowledges pretrained models and code, as the handout requires.}
+We use PyTorch~\cite{paszke2019pytorch} and torchvision for the ResNets, Hugging Face Transformers~\cite{wolf2020transformers} for CLIP, scikit-learn~\cite{pedregosa2011sklearn} for the logistic regressions and nearest neighbours, and NumPy~\cite{harris2020numpy} and pandas~\cite{mckinney2010pandas} for the analysis. We build on two sets of pretrained weights, OpenAI's CLIP ViT-L/14 and torchvision's ImageNet ResNet-50.
 
 An expert is a binary classifier that separates real images from the fakes of a single generator family. It is trained only on that family's real and fake images (\texttt{expert\_train}) and validated on \texttt{expert\_val}. We train seven experts per backbone, one each for ADM, BigGAN, GLIDE, Midjourney, Stable Diffusion, VQDM and Wukong. Stable Diffusion v1.4 and v1.5 produce near-identical images, so they share one expert, whose training data is drawn half from each version; every expert therefore sees the same number of images (10,000 for training, 2,000 for validation).
 
@@ -159,7 +151,6 @@ We build two pools of experts on exactly the same images: linear probes on froze
 CLIP~\cite{radford2021clip} learns visual features from natural language instead of fixed class labels. An image encoder and a text encoder are trained together to predict which caption belongs to which image within a batch, using about 400 million image--text pairs collected from the internet. CLIP is therefore never trained to separate real from generated images. Each encoder's output is mapped by a linear projection into a shared embedding space in which matching images and captions lie close together. We use this projected image embedding, a 768-dimensional vector, as the feature for our experts. Of the image encoders trained by Radford et al., we use the Vision Transformer ViT-L/14~\cite{dosovitskiy2021vit} with the weights released by OpenAI\footnote{\texttt{openai/clip-vit-large-patch14} on the Hugging Face Hub.} at 224\,px input resolution, with all weights frozen.
 
 Our CLIP experts follow the recipe of Ojha et al.~\cite{ojha2023universal}, a linear classifier on frozen CLIP ViT-L/14 features, which generalises to unseen generators much better than detectors trained for the task (Section~\ref{sec:intro}). Unlike them, we train one linear probe per generator family rather than a single probe.
-\remark{Removed the sentence on the 336\,px CLIP variant, which we never use.}
 
 \subsubsection{From features to experts}
 
@@ -168,7 +159,6 @@ The embedding is computed once per image and stored. As input we use a $224\time
 
 \paragraph{Choice of classifier.}
 A linear probe beats $k$-nearest neighbours under cosine distance, the other head used by Ojha et al.~\cite{ojha2023universal}, by 11.8 accuracy points on the expert's own generator and 2.5 points on the others (Appendix~\ref{app:knn}), so we use it as the expert head.
-\remark{First sentence of ``Features'' shortened (Tim's ``duplicated'' note); the kNN comparison moved to Appendix B, with this one-sentence summary.}
 
 \paragraph{The seven experts.}
 Each CLIP expert standardises the features and fits a logistic regression with the default L2 regularisation ($C=1$), identical for all experts and not tuned. Accuracy varies by at most 1.1 points for $C$ between 0.01 and 10, so this choice is not critical; as $C$ was compared on validation images, we treat this as a sensitivity check rather than tuning. All seven experts reach a validation AUROC of at least 0.986 (accuracy 0.942--0.995); the diagonal of Table~\ref{tab:cross-auroc} in Section~\ref{sec:pools} shows the same on \texttt{meta\_val}. The BigGAN expert's near-perfect score (AUROC 0.9999) may be inflated by the upscaling cue discussed in Section~\ref{sec:preprocessing}. As scores we use the raw logits of the logistic regression.
@@ -178,11 +168,10 @@ Each CLIP expert standardises the features and fits a logistic regression with t
 The CLIP experts add a single linear layer to features that were never trained for detection. The ResNet experts are the opposite case: every weight is adapted to one generator. We use ResNet-50~\cite{he2016resnet}, the network GenImage uses for its own cross-generator experiments, where it reaches near-perfect accuracy on the training generator and weak transfer to the rest~\cite{zhu2023genimage}.
 
 \paragraph{Model and training.}
-Each expert starts from torchvision's ImageNet-pretrained weights, with its classifier replaced by a single logit. All layers are fine-tuned on the expert's \texttt{expert\_train} images with binary cross-entropy and AdamW~\cite{loshchilov2019adamw} (weight decay $10^{-4}$), using a one-cycle schedule with a peak learning rate of $10^{-4}$, batches of 64 and at most 8 epochs. Training images are randomly cropped to $224\times224$ and horizontally flipped; evaluation uses a center crop. Since images are already $256\times256$, the random crop never resizes anything and leaves the pixel-level traces of Section~\ref{sec:preprocessing} intact. We keep the epoch with the lowest loss on \texttt{expert\_val} and stop after two epochs without improvement. We select on loss rather than accuracy or AUROC because both saturate early and then barely separate one epoch from the next, while the loss still does.
+Each expert starts from torchvision's ImageNet-pretrained weights, with its classifier replaced by a single logit. All layers are fine-tuned on the expert's \texttt{expert\_train} images with binary cross-entropy and AdamW~\cite{loshchilov2019adamw} (weight decay $10^{-4}$), using a one-cycle schedule with a peak learning rate of $10^{-4}$, batches of 64 and at most 8 epochs. As input we use $224\times224$ crops of the $256\times256$ images, the resolution of the pretrained weights: random crops with horizontal flips for training, the center crop for evaluation. Cropping instead of resizing leaves the pixel-level traces of Section~\ref{sec:preprocessing} intact. We keep the epoch with the lowest loss on \texttt{expert\_val} and stop after two epochs without improvement. We select on loss rather than accuracy or AUROC because both saturate early and then barely separate one epoch from the next, while the loss still does.
 
 \paragraph{Temperature.}
 Since deep networks are often overconfident~\cite{guo2017calibration}, we also fit a temperature $T \geq 1$ per expert on \texttt{expert\_val}. It stays between 1.00 and 1.12 (Appendix~\ref{app:resnet}), so the experts need almost no correction on their own generator. Like the CLIP experts, they pass on raw logits; a temperature would not change an expert's AUROC anyway.
-\remark{Shortened from eight sentences to three: the temperatures are never applied, so they change no result. The expert table moved to Appendix C.}
 
 \paragraph{Scores and cost.}
 All seven experts reach a validation AUROC of at least 0.996. As with the CLIP BigGAN expert, the perfect BigGAN score may be inflated by the upscaling cue (Section~\ref{sec:preprocessing}). Each expert scores all 96{,}000 images outside \texttt{expert\_train}, giving seven logits per image and pool. Each expert was trained once, so we cannot report variation between seeds. On a single Apple M4 laptop, training the seven experts took 3.6\,h (20 to 45 minutes each) and scoring all images about 1.5\,h.
@@ -232,7 +221,6 @@ Wukong & .731 & .692 & .838 & .899 & .997 & .998 & .821 & \textbf{.999} \\
 The obvious alternative to combining experts is not to split the data in the first place. For every leave-one-out fold we therefore also train one \emph{generalist} per backbone on the \texttt{expert\_train} images of all known generators together: the union of the training sets of the remaining experts, 60,000 images (50,000 when Stable Diffusion and Wukong are held out together). The generalist sees exactly the images the experts see between them, so the comparison asks one question only: one model, or several models and a combiner? If anything it favours the combiners, which are additionally fitted on \texttt{meta\_train}, images the generalist never sees.
 
 The CLIP generalist is the expert recipe unchanged, a logistic regression with $C=1$ on standardised CLIP features. The ResNet-50 generalist uses the expert recipe as well, with early stopping and the temperature fitted on the \texttt{expert\_val} images of the known generators. We train eight ResNet-50 generalists, one for each of the seven single-family folds and one that holds out Stable Diffusion (v1.4 and v1.5) and Wukong together; the main evaluation uses six of them (Section~\ref{sec:protocol}). On the known generators all eight reach a validation AUROC of 0.998 or 0.999, with the best epoch between 4 and 8. Unlike the ResNet-50 experts, every generalist needs a clear temperature correction ($T$ between 1.22 and 1.61): a single network covering six generators is overconfident even on images from those generators. Each generalist took 95 to 136 minutes to train, about 16\,h in total, between four and five times the cost of the seven ResNet-50 experts. Generalists are evaluated exactly like a meta-learner: the decision threshold comes from the known generators' \texttt{meta\_val} images, and AUROC, AP and accuracy are measured on the held-out generator only. On the held-out generators the ResNet-50 generalists reach a mean AUROC of 0.978, from 0.965 for ADM to 0.999 for GLIDE, against 0.999 on the known generators (Appendix~\ref{app:generalists}). The ranking therefore transfers well, but the threshold transfers less well: accuracy falls to 84.2\% on average and to about 76\% for ADM and BigGAN.
-\remark{``Six in total'' corrected to eight trained, six evaluated (Tim's notebook trains all eight). The per-fold generalist table moved to Appendix D; its ``Known AUROC'' is measured on the test images of the known generators, not on validation.}
 
 \section{Meta-learners}\label{sec:meta}
 
@@ -296,12 +284,10 @@ A meta-learner (or combiner) takes the raw logits produced by the active experts
 \caption{(a) Leave-one-generator-out setup, here with GLIDE held out: the held-out generator's expert is removed, the six remaining experts each give one logit, and a combiner turns them into one score. The generalist is the alternative: one detector trained on the images of all known generators. (b) The eight combiners by flexibility (rows) and identity-awareness (columns), with their trainable parameters for six experts (from our code). Each matched pair differs only in whether it sees which expert produced which logit.}
 \label{fig:overview}
 \end{figure}
-\remark{Figure 2 is new and drawn in code (TikZ): it replaces Lída's taxonomy table with the same pooling/routing grid, adds the leave-one-out pipeline and the real parameter counts.}
 
 \subsection{Pooling vs.\ Routing}
 
 \textbf{Pooling} (identity-blind) combiners see only the pattern of scores, not which expert produced which, so we expect them to transfer more reliably to truly new generators. \textbf{Routing} (identity-aware) combiners know each expert's identity and learn whom to trust, so we expect them to do best on known generators and on held-out generators with a known ``sibling'' (such as Stable Diffusion and Wukong), and to drop more sharply on unrelated ones.
-\remark{Same content as Lída's two paragraphs, about half the length.}
 
 \subsection{Candidate Combiners}
 
@@ -315,11 +301,9 @@ Standard \textbf{Logistic regression (stacking)} learns one weight per expert, c
 
 \paragraph{Neural networks (high capacity).}
 A standard \textbf{MLP} takes the fixed-order vector of expert logits, allowing it to model non-linear interactions across experts (e.g., firing only when two specific specialists agree). Its identity-blind counterpart, the \textbf{Shuffled MLP} (Matched Pair B), uses the identical architecture and parameter count but shuffles the order of the logits independently for every training image, so no input position can stand for a particular expert; at prediction it averages over ten random orders. \textbf{Deep Sets}~\cite{zaheer2017deepsets} treat the experts' logits as an unordered set. A small network $\phi$ maps each logit on its own to a 32-dimensional vector, the vectors are summed over experts, and a second network $\rho$ maps the sum to the final score, $f(s_1,\dots,s_n) = \rho\big(\sum_i \phi(s_i)\big)$. Because a sum does not depend on the order of its terms, the output cannot depend on which expert produced which logit, and the same network accepts any number of experts. Unlike the sorted LR, it can still learn non-linear rules such as ``two confident experts count for more than one very confident expert''. Finally, a \textbf{Gating network (mixture of experts)} maps the vector of logits through a small network to one softmax weight per expert and outputs the weighted sum of the logits. Because each input position belongs to a fixed expert, it can learn per image which expert to trust, which makes it the most explicit form of routing.
-\remark{Corrected against \texttt{meta/learners/}: Max is the highest logit (not a noisy-OR); the shuffled MLP shuffles per image, not per batch; Deep Sets has no CLIP/ResNet flag and is now explained (Tim's note); the gating network is ``the most explicit'' rather than ``the most expressive'' router, since it has fewer parameters than the MLP. ``Oracle on the test set'' replaced by the best expert chosen on the known generators, which is what our baseline does.}
 
 \paragraph{Ablation: pseudo-unseen training.}\label{sec:pseudo}
 As a diagnostic, not a separate method, we also train stacking LR, the MLP, Deep Sets and the gating network in a \emph{pseudo-unseen} (PU) variant. During fitting, each image's own expert, which recognises it almost perfectly, is hidden by setting its logit to 0 (for real images too, so hiding says nothing about the label); at prediction each expert is hidden in turn and the scores are averaged. If a combiner leans on the image's own expert, a shortcut that does not exist for an unseen generator, PU training should change it.
-\remark{Demoted as agreed: pseudo-unseen training is now a three-sentence ablation instead of its own subsection, and it is no longer in the abstract or Figure~2.}
 
 
 \subsection{Training details}\label{sec:training}
@@ -330,20 +314,17 @@ Both logistic regressions use $C=1$ on raw logits. The MLP has two hidden layers
 
 \paragraph{Folds.} Each fold holds out one generator family: its expert is removed, and its images are excluded from fitting and early stopping. Stable Diffusion and Wukong detect each other at AUROC 0.97 or above in both pools (Table~\ref{tab:cross-auroc}), so holding out one of them while the other's expert stays would not test an unseen generator. We therefore hold them out together, which gives six folds: ADM, BigGAN, GLIDE, Midjourney, VQDM, and Stable Diffusion (v1.4 and v1.5) with Wukong. The effect is not small: with seven folds, the ResNet-50 mean combiner would score 0.952 instead of 0.937. In each fold a combiner is fitted on the \texttt{meta\_train} images of the known generators (28,000 images, 20,000 in the joint fold), with six experts as input (five in the joint fold), and evaluated on the held-out generator's \texttt{test} images (4,000 per generator, 12,000 in the joint fold). We report the mean over folds.
 
-\paragraph{Metrics.} \textbf{AUROC} measures how well a score ranks fakes above reals, without any threshold. \textbf{AP} (average precision) is the area under the precision--recall curve with fakes as the positive class; for CLIP and ResNet-50 it stays within 0.01 of AUROC for every method, so we report AUROC. \textbf{Accuracy} needs a threshold, and a deployed detector cannot tune it on a generator it has never seen, so we choose the threshold with the highest accuracy on the known generators' \texttt{meta\_val} images and apply it unchanged to the held-out generator. \textbf{Known AUROC} is measured on the \texttt{test} images of the known generators, and the \textbf{gap} is known minus unseen AUROC, the measure of RQ3.
+\paragraph{Metrics.} \textbf{AUROC}, the area under the ROC curve, measures how well a score ranks fakes above reals: it is the probability that a randomly chosen fake image gets a higher score than a randomly chosen real one, so 0.5 is chance and 1 is perfect. It needs no decision threshold, which makes it our main metric for unseen generators. \textbf{AP} (average precision) is the area under the precision--recall curve with fakes as the positive class; for CLIP and ResNet-50 it stays within 0.01 of AUROC for every method, so we report AUROC. \textbf{Accuracy} needs a threshold, and a deployed detector cannot tune it on a generator it has never seen, so we choose the threshold with the highest accuracy on the known generators' \texttt{meta\_val} images and apply it unchanged to the held-out generator. \textbf{Known AUROC} is measured on the \texttt{test} images of the known generators, and the \textbf{gap} is known minus unseen AUROC, the measure of RQ3.
 
 \paragraph{Use of the test pool.} All design choices (six folds, raw logits, combiner settings, the comparisons below) were made on \texttt{meta\_val}, and the \texttt{test} pool was evaluated once, after they were fixed. For CLIP and ResNet-50, every bootstrap conclusion on \texttt{test} is the same as on \texttt{meta\_val}, except two differences below 0.002 on CLIP (gating vs mean, PU Deep Sets vs Deep Sets), which switch between clear and not clear.
 
 \subsection{Is a difference real? Paired bootstrap}\label{sec:bootstrap}
 
 Seeds only cover the combiners' random initialisation; the test images are a random sample too. For every comparison we therefore run a paired bootstrap over the held-out images~\cite{efron1993bootstrap}. In each of 1,000 resamples we redraw, within every fold, the held-out real and fake images with replacement, keeping the fold's size and balance, and recompute the mean unseen AUROC over folds for \emph{both} methods on the same redrawn images. The 2.5th and 97.5th percentiles of the difference give a 95\% interval, and we call a difference \emph{clear} when this interval excludes zero. The comparisons were fixed before the \texttt{test} run.\footnote{Except the four comparisons of the ResNet generalists, added after the \texttt{test} run once their per-image scores were available; they mirror the CLIP generalist comparisons fixed in advance.} The bootstrap does not cover the training randomness of the experts, each trained once, nor the choice of generators: a claim about generators in general rests on six cases, which is why we also report every fold (Table~\ref{tab:folds}).
-\remark{Sections 4.3--4.5 are new: training details, the evaluation protocol with the metric definitions, and the bootstrap (Tim's ``stat analysis'' note).}
 
 \section{Results}\label{sec:results}
 
 Table~\ref{tab:main} gives the main results, Table~\ref{tab:bootstrap} the bootstrap intervals for the key comparisons behind each research question, and Table~\ref{tab:folds} the individual folds.
-\remark{Size check: the bootstrap table now keeps one or two comparisons per research question (7 rows instead of 16), and the pseudo-unseen rows left the main table; both are complete in Appendices E and F.}
-\remark{Replaces ``Answers to Research Questions'': all numbers are now final \texttt{test} numbers (the old ones were \texttt{meta\_val}), every answer cites its table (Tim's note), and the heat maps are replaced by tables. Four old claims did not hold on test: combiners being ``nearly identical'' to the generalist (only on CLIP), identity-blind networks ``consistently'' winning (the MLP leads by 0.0007 on CLIP), the capacity/gap story (it came from the backup ResNet-18), and PU being ``essential'' for thresholds (the plain mean is as good).}
 
 \begin{table}[t]
 \centering
@@ -370,7 +351,7 @@ Gating & R & .969 & .897 & .021 & .949 & .768 & .048 \\
 Generalist & -- & \textbf{.975} & \textbf{.907} & \textbf{.016} & \textbf{.978} & \textbf{.842} & \textbf{.021} \\
 \bottomrule
 \end{tabular}
-\caption{Unseen-generator results on \texttt{test}, mean over six folds (and three seeds for neural combiners). Type: P = pooling (identity-blind), R = routing (identity-aware). Accuracy uses the threshold fitted on the known generators; gap = known minus unseen AUROC (lower is better). Bold: best per column. The pseudo-unseen ablation is in Appendix~\ref{app:pu}.}
+\caption{Unseen-generator results on \texttt{test}, mean over six folds (and three seeds for neural combiners). Type: P = pooling (identity-blind), R = routing (identity-aware). Accuracy uses the threshold fitted on the known generators; Gap = known minus unseen AUROC (lower is better). Bold: best per column. The pseudo-unseen ablation is in Appendix~\ref{app:pu}.}
 \label{tab:main}
 \end{table}
 
@@ -427,7 +408,7 @@ Combining helps a lot. Deploying the single expert that looks best on the known 
 Knowing which expert produced which score does not help. In both matched pairs the identity-blind partner is as good or better: the sorted LR beats stacking LR on both backbones ($-0.001$ and $-0.004$ for stacking), and the shuffled MLP beats the MLP on ResNet-50 ($-0.002$ for the MLP). The one difference in favour of identity, the MLP on CLIP, is $+0.0007$, an order of magnitude below the other effects in this study. The gating network, the most explicit router, is never better than Deep Sets. Section~\ref{sec:disc-identity} discusses why.
 
 \paragraph{RQ3: Effect of combiner capacity on transfer.}
-Capacity helps only when the experts are weak. On CLIP, the flexible combiners improve on the mean by at most 0.003, and the gating network not at all. On ResNet-50, the MLP, Deep Sets and gating network all gain about 0.012 over the mean, and stacking LR 0.008, all clear. The fixed rules already show why: on ResNet-50 the maximum beats the mean (0.946 vs 0.937), because a fake from an unseen generator often triggers only one or two experts and averaging dilutes them, whereas on CLIP, where most experts transfer, averaging wins (0.969 vs 0.966). The flexible combiners learn such rules from data. The feared overfitting does not appear in AUROC: on ResNet-50 the gap shrinks slightly with capacity (0.053 for the mean, 0.047--0.049 for the neural combiners), and on CLIP it grows only from 0.016 to about 0.020, because the flexible combiners fit the known generators better (known AUROC 0.991--0.992 vs 0.985 on CLIP, 0.997 vs 0.989 on ResNet-50) and the unseen ones about as much better. It appears in accuracy instead: on ResNet-50 the neural combiners lose 3 to 4 points against the mean (0.765--0.777 vs 0.807) despite their higher AUROC, because their threshold does not transfer (Section~\ref{sec:disc-threshold}).
+Capacity helps only when the experts are weak. On CLIP, the flexible combiners improve on the mean by at most 0.003, and the gating network not at all. On ResNet-50, the MLP, Deep Sets and gating network all gain about 0.012 over the mean, and stacking LR 0.008, all clear. The fixed rules already show why: on ResNet-50 the maximum beats the mean (0.946 vs 0.937), because a fake from an unseen generator often triggers only one or two experts and averaging dilutes them, whereas on CLIP, where most experts transfer, averaging wins (0.969 vs 0.966). The flexible combiners learn such rules from data. The overfitting does not appear in AUROC: on ResNet-50 the gap shrinks slightly with capacity (0.053 for the mean, 0.047--0.049 for the neural combiners), and on CLIP it grows only from 0.016 to about 0.020, because the flexible combiners fit the known generators better (known AUROC 0.991--0.992 vs 0.985 on CLIP, 0.997 vs 0.989 on ResNet-50) and the unseen ones about as much better. It appears in accuracy instead: on ResNet-50 the neural combiners lose 3 to 4 points against the mean (0.765--0.777 vs 0.807) despite their higher AUROC, because their threshold does not transfer (Section~\ref{sec:disc-threshold}).
 
 \paragraph{RQ4: Dependence on the type of expert.}
 The CLIP experts transfer better on their own (mean cross-generator AUROC 0.892 vs 0.794, Table~\ref{tab:cross-auroc}), and the advantage survives combination: CLIP combiners beat ResNet-50 combiners by $+0.024$ (MLP) to $+0.033$ (mean). What changes with the expert type is how much the combiner matters. With CLIP experts nearly every combiner lands between 0.966 and 0.972; with ResNet-50 experts combining gains twice as much over the best expert, and capacity adds another 0.012. For the generalists the ranking of the backbones reverses: the ResNet-50 generalist (0.978) is slightly ahead of the CLIP generalist (0.975). This comparison was not in our pre-fixed bootstrap list, so we report it as an observation. It suggests that the CLIP advantage belongs to experts that each see one generator, not to the backbone as such.
@@ -439,7 +420,6 @@ Hiding each image's own expert does not improve ranking: the MLP loses 0.004 (CL
 The backup pool repeats the RQ1 and RQ4 findings (best expert 0.712, best combiner 0.891, generalist 0.933, all generalist margins clear). Its small RQ2 and RQ3 differences change sign between \texttt{meta\_val} and \texttt{test}, so we draw no conclusions from them.
 
 \section{Discussion}\label{sec:discussion}
-\remark{New section. Each subsection explains one result: why the generalist wins (6.1), why identity does not help (6.2), why accuracy and AUROC disagree (6.3), and what our evidence cannot show (6.4).}
 
 \subsection{Why one detector beats combined experts}\label{sec:disc-generalist}
 
@@ -460,15 +440,15 @@ Across the study, AUROC and accuracy tell different stories. The neural combiner
 Our conclusions rest on six held-out generators from a single benchmark whose real images all come from ImageNet. The bootstrap covers the sampling of test images, not the choice of generators, and the experts were trained once each; the per-fold results (Table~\ref{tab:folds}) show which findings hold fold by fold (the ResNet-50 generalist margin) and which only on average (the CLIP generalist margin). We work with a 176,000-image subsample and $224\times224$ crops. Two dataset cues remain, the upscaling of small images and the double compression of reals (Section~\ref{sec:preprocessing}); our checks bound their effect but cannot remove it. Finally, the combiners only see one logit per expert; combiners that see the experts' internal features, or experts trained to report shared traces, might close part of the gap to the generalist.
 
 \section{Conclusion}\label{sec:conclusion}
-\remark{Rewritten from the test results as three plain answers. The old one used \texttt{meta\_val} numbers and claimed CLIP is ``consistently'' best, PU adds ``4.1 points over stacking'' (on test: 0.5) and combiners are ``near-optimal'' (only on CLIP).}
 
 We asked whether combining generator-specific experts helps on a generator that none of them has seen. Three answers stand out. \textbf{First, combining clearly helps:} every combiner beats the best single expert, by 0.06 AUROC with CLIP experts and by 0.13 to 0.14 with ResNet-50 experts, and on average it matches the best expert one could only have picked in hindsight. \textbf{Second, how the experts are combined matters little:} ignoring which expert produced which score is never worse, and extra capacity only helps the weaker ResNet-50 experts, where it improves ranking but makes the decision threshold less reliable. \textbf{Third, one detector trained on all known generators is better still}, slightly with CLIP and clearly with ResNet-50. Our explanation is that an expert's score only says whether an image looks like its own generator, and so loses the traces that generators share. In practice, our results favour training one detector on all known generators and re-checking its threshold whenever new generators appear; combining experts pays off mainly where retraining that detector is too expensive.
 
 \section*{AI Use Statement}
+\addcontentsline{toc}{section}{AI Use Statement}
 We used Claude (Anthropic) through Claude Code for coding, debugging and writing. It wrote or revised code for the ResNet experts, the evaluation of the generalists, the CLIP generalist, the best-expert baseline, pseudo-unseen training, the paired bootstrap and the JPEG check, and it drafted or edited parts of this report. \todo{Tim and Lída: add your tools and uses.} We reviewed and tested all generated code, recomputed every reported number from our saved results and checked every reference against its source. Our team chose the research questions, designed and ran all experiments on our own machines and interpreted the results.
-\remark{New, required by the handout (marks are deducted without it). Contributions left out as agreed.}
 
 \clearpage
+\addcontentsline{toc}{section}{References}
 
 \begin{thebibliography}{99}
 
@@ -483,9 +463,9 @@ An image is worth 16x16 words: Transformers for image recognition at scale.
 In \emph{International Conference on Learning Representations (ICLR)}, 2021.
 
 \bibitem{efron1993bootstrap}
-\newref{Bradley Efron and Robert J. Tibshirani.
+Bradley Efron and Robert J. Tibshirani.
 \emph{An Introduction to the Bootstrap}.
-Chapman \& Hall, 1993.}
+Chapman \& Hall, 1993.
 
 \bibitem{grommelt2024fake}
 Patrick Grommelt, Louis Weiss, Franz-Josef Pfreundt, and Janis Keuper.
@@ -498,9 +478,9 @@ On calibration of modern neural networks.
 In \emph{International Conference on Machine Learning (ICML)}, pages 1321--1330, 2017.
 
 \bibitem{harris2020numpy}
-\newref{Charles R. Harris, K. Jarrod Millman, St{\'e}fan J. van der Walt, et al.
+Charles R. Harris, K. Jarrod Millman, St{\'e}fan J. van der Walt, et al.
 Array programming with NumPy.
-\emph{Nature}, 585(7825):357--362, 2020.}
+\emph{Nature}, 585(7825):357--362, 2020.
 
 \bibitem{he2016resnet}
 Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
@@ -518,9 +498,9 @@ Decoupled weight decay regularization.
 In \emph{International Conference on Learning Representations (ICLR)}, 2019.
 
 \bibitem{mckinney2010pandas}
-\newref{Wes McKinney.
+Wes McKinney.
 Data structures for statistical computing in Python.
-In \emph{Proceedings of the 9th Python in Science Conference}, pages 56--61, 2010.}
+In \emph{Proceedings of the 9th Python in Science Conference}, pages 56--61, 2010.
 
 \bibitem{ojha2023universal}
 Utkarsh Ojha, Yuheng Li, and Yong Jae Lee.
@@ -528,14 +508,14 @@ Towards universal fake image detectors that generalize across generative models.
 In \emph{IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, pages 24480--24489, 2023.
 
 \bibitem{paszke2019pytorch}
-\newref{Adam Paszke, Sam Gross, Francisco Massa, et al.
+Adam Paszke, Sam Gross, Francisco Massa, et al.
 PyTorch: An imperative style, high-performance deep learning library.
-In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, volume 32, 2019.}
+In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, volume 32, 2019.
 
 \bibitem{pedregosa2011sklearn}
-\newref{Fabian Pedregosa, Ga{\"e}l Varoquaux, Alexandre Gramfort, et al.
+Fabian Pedregosa, Ga{\"e}l Varoquaux, Alexandre Gramfort, et al.
 Scikit-learn: Machine learning in Python.
-\emph{Journal of Machine Learning Research}, 12:2825--2830, 2011.}
+\emph{Journal of Machine Learning Research}, 12:2825--2830, 2011.
 
 \bibitem{radford2021clip}
 Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever.
@@ -543,9 +523,9 @@ Learning transferable visual models from natural language supervision.
 In \emph{International Conference on Machine Learning (ICML)}, pages 8748--8763, 2021.
 
 \bibitem{wolf2020transformers}
-\newref{Thomas Wolf, Lysandre Debut, Victor Sanh, et al.
+Thomas Wolf, Lysandre Debut, Victor Sanh, et al.
 Transformers: State-of-the-art natural language processing.
-In \emph{Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations}, pages 38--45, 2020.}
+In \emph{Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations}, pages 38--45, 2020.
 
 \bibitem{wolpert1992stacked}
 David H. Wolpert.
@@ -553,9 +533,9 @@ Stacked generalization.
 \emph{Neural Networks}, 5(2):241--259, 1992.
 
 \bibitem{zaheer2017deepsets}
-\newref{Manzil Zaheer, Satwik Kottur, Siamak Ravanbakhsh, Barnab{\'a}s P{\'o}czos, Ruslan Salakhutdinov, and Alexander J. Smola.
+Manzil Zaheer, Satwik Kottur, Siamak Ravanbakhsh, Barnab{\'a}s P{\'o}czos, Ruslan Salakhutdinov, and Alexander J. Smola.
 Deep sets.
-In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, pages 3391--3401, 2017.}
+In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, pages 3391--3401, 2017.
 
 \bibitem{zhu2023genimage}
 Mingjian Zhu, Hanting Chen, Qiangyu Yan, Xudong Huang, Guanyu Lin, Wei Li, Zhijun Tu, Hailin Hu, Jie Hu, and Yunhe Wang.
@@ -566,6 +546,8 @@ In \emph{Advances in Neural Information Processing Systems (NeurIPS), Datasets a
 
 \clearpage
 \appendix
+\addcontentsline{toc}{section}{Appendices}
+\titleformat{\section}{\large\bfseries}{Appendix \thesection}{0.6em}{}
 
 \section{Sampling of the shards}\label{app:sampling}
 The Hugging Face mirror stores each generator's training split in shards of about 0.5\,GB, with rows sorted by ImageNet class. Reading shards in order would therefore cover only the first classes. Instead, we visit shards in a coarse-to-fine order ($0, n/2, n/4, 3n/4, n/8, \ldots$), so that the visited shards span the whole class range wherever sampling stops. We take at most 150 images per label per shard and assign each accepted image to a pool at random, weighted by how many images that pool still needs. Pools therefore fill evenly and mix images from many shards and classes. If a label is still short after this pass (e.g.\ BigGAN fakes, which sit in only a few shards), we revisit only the shards known to contain it.
