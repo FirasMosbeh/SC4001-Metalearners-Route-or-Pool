@@ -222,3 +222,19 @@ __marimo__/
 input
 .venv/
 venv/
+
+# macOS
+.DS_Store
+
+# Editors / IDEs
+.idea/
+.vscode/
+
+# LaTeX build files (report/)
+*.aux
+*.toc
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.xdv

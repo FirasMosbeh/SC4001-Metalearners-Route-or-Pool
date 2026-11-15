@@ -1,7 +1,9 @@
 \documentclass[10pt,a4paper]{article}
 \usepackage[a4paper,margin=2cm]{geometry}
-\usepackage[sfdefault]{arimo} % Arimo has the same letter widths as Arial (handout: Arial 10pt)
-\usepackage[T1]{fontenc}
+% Arial 10pt as the handout requires. Compile with XeLaTeX (Overleaf: Menu -> Compiler -> XeLaTeX).
+% If Arial is not installed, Arimo (same letter widths as Arial) is used instead.
+\usepackage{fontspec}
+\IfFontExistsTF{Arial}{\setmainfont{Arial}\setsansfont{Arial}}{\setmainfont{Arimo}\setsansfont{Arimo}}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{hyperref}
